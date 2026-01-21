@@ -1,3 +1,4 @@
+import time
 import os
 import psutil
 import requests
@@ -13,18 +14,25 @@ def send_telegram_message(message):
         return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
-    requests.post(url, json=payload)
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"Failed to send: {e}")
 
 def check_system_health():
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cpu = psutil.cpu_percent(interval=1)
-    memory = psutil.virtual_memory().percent
-    
-    report = f"🛡️ *AutoSentinel Report*\n📅 Time: {now}\n💻 CPU: {cpu}%\n🧠 RAM: {memory}%"
-    
-    # נשלח תמיד בשביל הבדיקה
-    send_telegram_message(report)
-    print("Command executed. Check your Telegram!")
+    print("🚀 AutoSentinel is running... (Press Ctrl+C to stop)")
+    while True:
+        cpu = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory().percent
+
+        if cpu > 80 or memory > 80:
+            msg = f"⚠️ *CRITICAL ALERT*\nCPU: {cpu}%\nRAM: {memory}%"
+            send_telegram_message(msg)
+            print(f"ALERT SENT! CPU: {cpu}%")
+        else:
+            print(f"Check passed: CPU is {cpu}%, RAM is {memory}%")
+
+        time.sleep(10)
 
 if __name__ == "__main__":
     check_system_health()
