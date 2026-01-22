@@ -1,38 +1,63 @@
 import time
 import os
 import psutil
-import requests
+import telebot
+import threading
+import socket
 import datetime
+from dotenv import load_dotenv
 
-# משיכת הסודות מהמערכת (אבטחת מידע)
+# טעינה
+load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def send_telegram_message(message):
-    if not TOKEN or not CHAT_ID:
-        print("Error: Token or Chat ID not found!")
-        return
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
-    try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Failed to send: {e}")
+bot = telebot.TeleBot(TOKEN)
 
-def check_system_health():
-    print("🚀 AutoSentinel is running... (Press Ctrl+C to stop)")
+# --- פונקציות עזר ---
+def get_system_status():
+    cpu = psutil.cpu_percent(interval=1)
+    memory = psutil.virtual_memory().percent
+    disk = psutil.disk_usage('/').percent
+    return f"📊 *Current Status:*\n\n🖥 CPU: {cpu}%\n🧠 RAM: {memory}%\n💾 Disk: {disk}%"
+
+def get_system_info():
+    hostname = socket.gethostname()
+    boot_time = datetime.datetime.fromtimestamp(psutil.boot_time()).strftime("%Y-%m-%d %H:%M:%S")
+    return f"ℹ️ *System Info:*\n\n🏠 Hostname: {hostname}\n🕒 Boot Time: {boot_time}"
+
+# --- טיפול בפקודות טלגרם ---
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    bot.reply_to(message, "👋 I'm AutoSentinel! Use the menu or send /status to check the server.")
+
+@bot.message_handler(commands=['status'])
+def status_command(message):
+    bot.send_message(CHAT_ID, get_system_status(), parse_mode="Markdown")
+
+@bot.message_handler(commands=['info'])
+def info_command(message):
+    bot.send_message(CHAT_ID, get_system_info(), parse_mode="Markdown")
+
+# --- לולאת הניטור (רצה ברקע) ---
+def monitoring_loop():
+    print("🚀 Monitoring loop started...")
     while True:
         cpu = psutil.cpu_percent(interval=1)
         memory = psutil.virtual_memory().percent
+        disk = psutil.disk_usage('/').percent
 
-        if cpu > 80 or memory > 80:
-            msg = f"⚠️ *CRITICAL ALERT*\nCPU: {cpu}%\nRAM: {memory}%"
-            send_telegram_message(msg)
-            print(f"ALERT SENT! CPU: {cpu}%")
-        else:
-            print(f"Check passed: CPU is {cpu}%, RAM is {memory}%")
+        if cpu > 80 or memory > 80 or disk > 90:
+            msg = f"⚠️ *CRITICAL ALERT*\nCPU: {cpu}%\nRAM: {memory}%\nDisk: {disk}%"
+            bot.send_message(CHAT_ID, msg, parse_mode="Markdown")
+        
+        time.sleep(60)
 
-        time.sleep(10)
-
+# --- הפעלה ---
 if __name__ == "__main__":
-    check_system_health()
+    monitor_thread = threading.Thread(target=monitoring_loop)
+    monitor_thread.daemon = True
+    monitor_thread.start()
+
+    print("🤖 Bot is listening...")
+    bot.infinity_polling()
