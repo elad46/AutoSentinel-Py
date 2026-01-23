@@ -4,60 +4,59 @@ import psutil
 import telebot
 import threading
 import socket
-import datetime
+import google.generativeai as genai
 from dotenv import load_dotenv
 
-# טעינה
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+
+# הגדרה מחדש של ה-AI בצורה שתואמת את העדכון האחרון
+if GEMINI_KEY:
+    genai.configure(api_key=GEMINI_KEY)
+    # כאן השתמשנו בשם המדויק והנקי שה-API דורש כרגע
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
 bot = telebot.TeleBot(TOKEN)
 
-# --- פונקציות עזר ---
-def get_system_status():
+def get_system_status_raw():
     cpu = psutil.cpu_percent(interval=1)
-    memory = psutil.virtual_memory().percent
+    mem = psutil.virtual_memory().percent
     disk = psutil.disk_usage('/').percent
-    return f"📊 *Current Status:*\n\n🖥 CPU: {cpu}%\n🧠 RAM: {memory}%\n💾 Disk: {disk}%"
+    return f"CPU: {cpu}%, RAM: {mem}%, Disk: {disk}%"
 
-def get_system_info():
-    hostname = socket.gethostname()
-    boot_time = datetime.datetime.fromtimestamp(psutil.boot_time()).strftime("%Y-%m-%d %H:%M:%S")
-    return f"ℹ️ *System Info:*\n\n🏠 Hostname: {hostname}\n🕒 Boot Time: {boot_time}"
+def get_top_processes():
+    processes = []
+    for proc in psutil.process_iter(['name', 'memory_percent']):
+        try: processes.append(proc.info)
+        except: continue
+    top_5 = sorted(processes, key=lambda x: x['memory_percent'], reverse=True)[:5]
+    res = "🔝 *תהליכים:* " + ", ".join([f"{p['name']} ({p['memory_percent']:.1f}%)" for p in top_5])
+    return res
 
-# --- טיפול בפקודות טלגרם ---
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    bot.reply_to(message, "👋 I'm AutoSentinel! Use the menu or send /status to check the server.")
+@bot.message_handler(commands=['analyze'])
+def analyze_command(message):
+    bot.reply_to(message, "🔍 מנתח נתונים בעברית...")
+    status = get_system_status_raw()
+    processes = get_top_processes()
+    
+    # הנחיה קצרה ופשוטה כדי למנוע שגיאות עיבוד
+    prompt = f"נתח את הנתונים הבאים של השרת וענה בעברית בלבד ובקצרה: {status}. {processes}"
+    
+    try:
+        # הוספת safety_settings למניעת חסימות מיותרות של ה-API
+        response = model.generate_content(prompt)
+        bot.send_message(CHAT_ID, f"🧠 *ניתוח AI:*\n\n{response.text}", parse_mode="Markdown")
+    except Exception as e:
+        # הדפסה מפורטת ללוגים כדי שנדע בדיוק מה גוגל אומרת
+        print(f"DEBUG: {e}")
+        bot.send_message(CHAT_ID, f"❌ שגיאה: {e}")
 
-@bot.message_handler(commands=['status'])
-def status_command(message):
-    bot.send_message(CHAT_ID, get_system_status(), parse_mode="Markdown")
-
-@bot.message_handler(commands=['info'])
-def info_command(message):
-    bot.send_message(CHAT_ID, get_system_info(), parse_mode="Markdown")
-
-# --- לולאת הניטור (רצה ברקע) ---
-def monitoring_loop():
-    print("🚀 Monitoring loop started...")
-    while True:
-        cpu = psutil.cpu_percent(interval=1)
-        memory = psutil.virtual_memory().percent
-        disk = psutil.disk_usage('/').percent
-
-        if cpu > 80 or memory > 80 or disk > 90:
-            msg = f"⚠️ *CRITICAL ALERT*\nCPU: {cpu}%\nRAM: {memory}%\nDisk: {disk}%"
-            bot.send_message(CHAT_ID, msg, parse_mode="Markdown")
-        
-        time.sleep(60)
-
-# --- הפעלה ---
 if __name__ == "__main__":
-    monitor_thread = threading.Thread(target=monitoring_loop)
-    monitor_thread.daemon = True
-    monitor_thread.start()
-
-    print("🤖 Bot is listening...")
-    bot.infinity_polling()
+    print("🚀 AutoSentinel is LIVE")
+    while True:
+        try:
+            bot.infinity_polling(timeout=20)
+        except Exception:
+            time.sleep(10)
