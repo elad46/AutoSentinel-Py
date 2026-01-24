@@ -23,14 +23,29 @@ def get_system_status_raw():
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     msg = (
-        "🚀 *AutoSentinel AI v2.0*\n\n"
-        "הבוט מחובר ל-Gemini 3 ומנטר את השרת.\n\n"
+        "🚀 *AutoSentinel AI v2.1*\n\n"
         "פקודות זמינות:\n"
         "/status - מצב חומרה מהיר\n"
         "/analyze - ניתוח AI מעמיק\n"
-        "/info - פרטי שרת מלאים"
+        "/info - פרטי שרת מלאים\n"
+        "/top - צריכת משאבים לפי אפליקציות"
     )
     bot.reply_to(message, msg, parse_mode='Markdown')
+
+@bot.message_handler(commands=['top'])
+def top_command(message):
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'memory_percent']):
+        processes.append(proc.info)
+    
+    # מיון לפי צריכת זיכרון והצגת ה-3 המובילים
+    top_procs = sorted(processes, key=lambda x: x['memory_percent'], reverse=True)[:3]
+    
+    response = "🔝 *צריכת משאבים מובילה:*\n"
+    for p in top_procs:
+        response += f"🔹 {p['name']}: {p['memory_percent']:.1f}% RAM\n"
+    
+    bot.reply_to(message, response, parse_mode='Markdown')
 
 @bot.message_handler(commands=['info'])
 def info_command(message):
