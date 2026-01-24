@@ -1,20 +1,23 @@
-# 🛡️ AutoSentinel-Py
+# 🛡️ AutoSentinel AI: Intelligent Server Monitoring
 
-**AI-Powered Server Monitoring Bot** AutoSentinel is a Python-based server monitoring tool that integrates with **Google Gemini 3 AI** and **Telegram** to provide real-time system health analysis.
+AutoSentinel is a professional-grade monitoring solution that bridges the gap between raw server metrics and actionable insights using **Google Gemini 3.0 AI**.
 
-## ✨ Features
-- 📊 **Real-time Monitoring:** Tracks CPU, RAM, and Disk usage.
-- 🤖 **AI Analysis:** Uses Gemini 3 Flash to provide professional insights in Hebrew.
-- 📱 **Telegram Interface:** Full control via a Telegram bot.
-- 🛠️ **System Info:** Get OS and Uptime details instantly.
+## 🧠 Why AutoSentinel?
+Unlike traditional monitors that just show numbers, AutoSentinel analyzes the context. It tells you *why* your RAM is high and *what* you should do about it in plain language.
 
-## 🚀 Commands
-- `/status` - Get raw hardware metrics.
-- `/analyze` - Get AI-powered health report.
-- `/info` - View server technical specifications.
+## 🚀 Key Features
+- **Real-Time Diagnostics:** Monitors CPU, Memory, and Disk Health.
+- **AI-Powered Insights:** Integrated with Gemini 3 Flash for heuristic system analysis.
+- **On-the-go Management:** Fully controlled via Telegram Bot API.
+- **Process Tracking:** `/top` command to identify resource-heavy applications.
 
-## 🛠️ Tech Stack
-- Python 3.12
-- Google GenAI (Gemini 3 Flash)
-- PyTelegramBotAPI
-- Psutil
+## 🛠️ Architecture
+1. **Collector:** Python `psutil` gathers hardware telemetry.
+2. **Analyzer:** Data is structured and sent to **Gemini 3 API** with custom prompting.
+3. **Interface:** Responses are delivered via **Telegram** with Markdown formatting.
+
+## 📦 Installation
+1. Clone the repo: `git clone https://github.com/YOUR_USERNAME/AutoSentinel-Py.git`
+2. Install dependencies: `pip install -r requirements.txt`
+3. Set up `.env` with your API keys.
+4. Run: `python monitor.py`
