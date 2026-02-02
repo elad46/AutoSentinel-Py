@@ -1,53 +1,73 @@
 import os
+import sqlite3
 import psutil
-import telebot
-import requests
-import threading
-import time
-from google import genai
+import matplotlib.pyplot as plt
+from datetime import datetime
 from dotenv import load_dotenv
+import telebot
+import google.generativeai as genai
 
 load_dotenv()
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-SLACK_URL = os.getenv("SLACK_WEBHOOK_URL")
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+GEMINI_KEY = os.getenv('GEMINI_API_KEY')
 
-bot = telebot.TeleBot(TELEGRAM_TOKEN)
-client = genai.Client(api_key=GEMINI_KEY, http_options={'api_version': 'v1beta'})
+# הגדרת ה-AI בשיטה הישנה והבטוחה
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-def send_slack_alert(message):
-    payload = {"text": f"🚨 *AutoSentinel Alert:* \n{message}"}
-    try:
-        requests.post(SLACK_URL, json=payload)
-    except Exception as e:
-        print(f"Error sending to Slack: {e}")
+bot = telebot.TeleBot(TOKEN)
 
-def monitor_system_background():
-    print("🕵️ Background monitoring started...")
-    while True:
-        try:
-            cpu = psutil.cpu_percent(interval=1)
-            ram = psutil.virtual_memory().percent
-            if cpu > 90 or ram > 90:
-                send_slack_alert(f"⚠️ High resource usage!\nCPU: {cpu}%\nRAM: {ram}%")
-            time.sleep(60)
-        except Exception as e:
-            print(f"Monitor error: {e}")
-            time.sleep(10)
-
-threading.Thread(target=monitor_system_background, daemon=True).start()
+def save_to_db(cpu, ram):
+    conn = sqlite3.connect('monitor_data.db')
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS stats (timestamp DATETIME, cpu REAL, ram REAL)")
+    c.execute("INSERT INTO stats VALUES (?, ?, ?)", (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), cpu, ram))
+    conn.commit()
+    conn.close()
 
 @bot.message_handler(commands=['status'])
-def status(message):
+def send_status(message):
     cpu = psutil.cpu_percent()
     ram = psutil.virtual_memory().percent
-    bot.reply_to(message, f"📊 מצב שרת:\nCPU: {cpu}%\nRAM: {ram}%")
+    save_to_db(cpu, ram)
+    bot.reply_to(message, f"🖥 מצב שרת:\nCPU: {cpu}%\nRAM: {ram}%")
 
-@bot.message_handler(commands=['test_slack'])
-def test_slack(message):
-    send_slack_alert("🔔 בדיקה מהשרת לסלאק - הכל עובד!")
-    bot.reply_to(message, "הודעת בדיקה נשלחה לסלאק! בדוק את ערוץ #alerts.")
+@bot.message_handler(commands=['graph'])
+def send_graph(message):
+    try:
+        conn = sqlite3.connect('monitor_data.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM stats ORDER BY timestamp DESC LIMIT 20")
+        data = c.fetchall()[::-1]
+        conn.close()
+        if len(data) < 2:
+            bot.reply_to(message, "צריך עוד נתונים. תריץ /status.")
+            return
+        times = [d[0].split(' ')[1] for d in data]
+        plt.figure(figsize=(10, 5))
+        plt.plot(times, [d[1] for d in data], label='CPU', color='red')
+        plt.plot(times, [d[2] for d in data], label='RAM', color='blue')
+        plt.savefig('status.png')
+        plt.close()
+        with open('status.png', 'rb') as photo:
+            bot.send_photo(message.chat.id, photo)
+    except Exception as e:
+        bot.reply_to(message, f"טעות בגרף: {e}")
 
-if __name__ == "__main__":
-    print("🚀 AutoSentinel is LIVE...")
-    bot.infinity_polling()
+@bot.message_handler(commands=['analyze'])
+def analyze_performance(message):
+    try:
+        conn = sqlite3.connect('monitor_data.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM stats ORDER BY timestamp DESC LIMIT 10")
+        data = c.fetchall()
+        conn.close()
+        
+        prompt = f"נתח את הנתונים הבאים בקצרה בעברית: {str(data)}"
+        response = model.generate_content(prompt)
+        bot.reply_to(message, f"🤖 ניתוח AI:\n{response.text}")
+    except Exception as e:
+        bot.reply_to(message, f"❌ שגיאה: {str(e)}")
+
+print("🚀 הבוט התחיל לעבוד בגרסה היציבה!")
+bot.infinity_polling()
