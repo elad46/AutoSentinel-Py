@@ -3,6 +3,8 @@ import sqlite3
 import psutil
 import time
 import threading
+import requests  # ספרייה חדשה לשליחת הודעות לסלאק
+import matplotlib.pyplot as plt
 from datetime import datetime
 from dotenv import load_dotenv
 import telebot
@@ -12,18 +14,28 @@ import google.generativeai as genai
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 GEMINI_KEY = os.getenv('GEMINI_API_KEY')
+ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
+SLACK_WEBHOOK = os.getenv('SLACK_WEBHOOK_URL')
 
 # הגדרת ה-AI
 genai.configure(api_key=GEMINI_KEY)
-MODEL_NAME = 'gemini-2.5-flash'
-model = genai.GenerativeModel(MODEL_NAME)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 bot = telebot.TeleBot(TOKEN)
 
-# משתנה גלובלי לשמירת ה-ID שלך להתראות
-MY_CHAT_ID = None
-
 # --- פונקציות עזר ---
+
+def is_authorized(message):
+    return message.chat.id == ADMIN_ID
+
+def send_slack_alert(text):
+    """שליחת הודעה לערוץ הסלאק"""
+    if SLACK_WEBHOOK:
+        payload = {"text": f"🚀 *AutoSentinel System Alert* 🚀\n{text}"}
+        try:
+            requests.post(SLACK_WEBHOOK, json=payload)
+        except Exception as e:
+            print(f"Slack Error: {e}")
 
 def save_to_db(cpu, ram):
     try:
@@ -36,107 +48,57 @@ def save_to_db(cpu, ram):
     except Exception as e:
         print(f"DB Error: {e}")
 
-# --- מערכת התראות (רצה ברקע) ---
+# --- מערכת התראות רקע ---
 
 def monitor_loop():
-    """בודק את השרת כל 5 דקות ושולח התראה אם יש עומס"""
-    print("📢 Background monitoring thread started.")
+    print("📢 Monitoring started (Telegram + Slack).")
     while True:
         try:
             cpu = psutil.cpu_percent(interval=1)
             ram = psutil.virtual_memory().percent
             save_to_db(cpu, ram)
             
-            # אם ה-ID ידוע ויש עומס מעל 90%
-            if MY_CHAT_ID and (cpu > 90 or ram > 95):
-                alert_msg = f"⚠️ התראת עומס!\nCPU: {cpu}%\nRAM: {ram}%"
-                bot.send_message(MY_CHAT_ID, alert_msg)
+            # אם יש עומס - שלח התראה לשני הערוצים
+            if cpu > 90 or ram > 95:
+                alert_msg = f"⚠️ עומס גבוה בשרת!\nCPU: {cpu}%\nRAM: {ram}%"
+                if ADMIN_ID != 0:
+                    bot.send_message(ADMIN_ID, alert_msg)
+                send_slack_alert(alert_msg)
             
-            time.sleep(300) # בדיקה כל 5 דקות
+            time.sleep(300) 
         except Exception as e:
-            print(f"Monitor Loop Error: {e}")
+            print(f"Loop Error: {e}")
             time.sleep(10)
 
 # --- פקודות בוט ---
 
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    global MY_CHAT_ID
-    MY_CHAT_ID = message.chat.id
-    print(f"📡 Chat ID linked: {MY_CHAT_ID}")
-    welcome_text = (
-        "הבוט הופעל בהצלחה! 🚀\n\n"
-        "פקודות:\n"
-        "/status - מצב שרת נוכחי\n"
-        "/analyze - ניתוח AI חכם\n"
-        "/graph - גרף ביצועים\n\n"
-        "אני אשלח לך התראה אוטומטית אם העומס יעבור את ה-90%."
-    )
-    bot.reply_to(message, welcome_text)
+@bot.message_handler(func=lambda message: not is_authorized(message))
+def handle_unauthorized(message):
+    bot.reply_to(message, "🚫 אין לך הרשאה לבוט זה.")
 
 @bot.message_handler(commands=['status'])
 def send_status(message):
-    global MY_CHAT_ID
-    MY_CHAT_ID = message.chat.id # עדכון ה-ID בכל פקודה ליתר ביטחון
     cpu = psutil.cpu_percent(interval=1)
     ram = psutil.virtual_memory().percent
-    save_to_db(cpu, ram)
-    bot.reply_to(message, f"🖥 מצב שרת:\nCPU: {cpu}%\nRAM: {ram}%")
+    bot.reply_to(message, f"🖥 מצב נוכחי:\nCPU: {cpu}%\nRAM: {ram}%")
+
+@bot.message_handler(commands=['test_slack'])
+def test_slack(message):
+    """פקודה לבדיקה ידנית שהסלאק עובד"""
+    send_slack_alert("🔔 בדיקת חיבור מוצלחת מהשרת של אלעד!")
+    bot.reply_to(message, "הודעת בדיקה נשלחה לסלאק! בדוק את ערוץ ה-Alerts שלך.")
 
 @bot.message_handler(commands=['analyze'])
 def analyze_performance(message):
-    try:
-        conn = sqlite3.connect('monitor_data.db')
-        c = conn.cursor()
-        c.execute("SELECT * FROM stats ORDER BY timestamp DESC LIMIT 15")
-        data = c.fetchall()
-        conn.close()
-        
-        if not data:
-            bot.reply_to(message, "אין מספיק נתונים בבסיס הנתונים.")
-            return
-
-        prompt = f"נתח בקצרה בעברית את הנתונים הבאים (בלי עיצוב Markdown): {str(data)}"
-        response = model.generate_content(prompt)
-        bot.reply_to(message, f"🤖 ניתוח AI:\n\n{response.text}")
-    except Exception as e:
-        bot.reply_to(message, f"❌ שגיאה בניתוח: {str(e)}")
-
-@bot.message_handler(commands=['graph'])
-def send_graph(message):
-    try:
-        conn = sqlite3.connect('monitor_data.db')
-        c = conn.cursor()
-        c.execute("SELECT * FROM stats ORDER BY timestamp DESC LIMIT 20")
-        data = c.fetchall()[::-1]
-        conn.close()
-        
-        if len(data) < 2:
-            bot.reply_to(message, "צריך לפחות 2 נקודות נתונים לגרף.")
-            return
-
-        times = [d[0].split(' ')[1] for d in data]
-        plt.figure(figsize=(10, 5))
-        plt.plot(times, [d[1] for d in data], label='CPU %', color='red', marker='o')
-        plt.plot(times, [d[2] for d in data], label='RAM %', color='blue', marker='s')
-        plt.legend()
-        plt.grid(True)
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        plt.savefig('status.png')
-        plt.close()
-        
-        with open('status.png', 'rb') as photo:
-            bot.send_photo(message.chat.id, photo)
-    except Exception as e:
-        bot.reply_to(message, f"❌ שגיאה בגרף: {e}")
-
-# --- הפעלה ---
+    conn = sqlite3.connect('monitor_data.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM stats ORDER BY timestamp DESC LIMIT 10")
+    data = c.fetchall()
+    conn.close()
+    response = model.generate_content(f"Analyze this server data briefly in Hebrew: {str(data)}")
+    bot.reply_to(message, f"🤖 ניתוח AI:\n{response.text}")
 
 if __name__ == "__main__":
-    # הפעלת תהליך הניטור ברקע
-    monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
-    monitor_thread.start()
-    
-    print(f"✅ Bot is running with {MODEL_NAME}...")
+    threading.Thread(target=monitor_loop, daemon=True).start()
+    print("✅ Bot is running with Slack integration.")
     bot.infinity_polling()

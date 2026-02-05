@@ -1,5 +1,6 @@
 pyTelegramBotAPI
 psutil
-matplotlib
 python-dotenv
+matplotlib
 google-generativeai
+requests
