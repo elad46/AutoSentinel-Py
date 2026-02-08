@@ -1,28 +1,25 @@
 # 🛡️ AutoSentinel-Py: Smart Infrastructure Monitoring
 
-AutoSentinel is a robust monitoring solution for Linux Systems and Cloud Infrastructure. It bridges the gap between raw hardware telemetry and actionable intelligence using **Google Gemini 3.0 AI**.
+AutoSentinel is a professional monitoring engine designed for Linux Systems and Cloud Infrastructure. It combines real-time hardware telemetry with **Google Gemini 3.0 AI** to provide actionable intelligence.
 
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen)
 ![OS](https://img.shields.io/badge/OS-Linux-black)
 ![Environment](https://img.shields.io/badge/Env-Cloud/On--Prem-blue)
-![AI](https://img.shields.io/badge/AI-Gemini_Flash-orange)
 
 ## 🌟 Overview
-Unlike standard monitoring tools, AutoSentinel tracks system health, visualizes performance trends, and uses AI to troubleshoot spikes. It is designed for System Administrators who need to manage servers efficiently via Telegram.
+AutoSentinel tracks system health, visualizes trends, and uses AI to troubleshoot spikes. Designed for System Administrators to manage servers efficiently via Telegram without needing SSH for every check.
 
 ## 🚀 Key Features
-- **📊 Performance Graphing:** Visualizes CPU/RAM trends over time (Matplotlib).
-- **🚨 Automated System Alerts:** Background monitoring that triggers instant notifications for resource exhaustion.
-- **🧠 Intelligent Diagnostics:** Uses Gemini 3 Flash to analyze system logs and metrics in real language.
-- **🐳 Containerized Deployment:** Fully Dockerized for consistent deployment across any Linux distribution.
-- **📈 Infrastructure Health:** Real-time metrics for CPU, Memory, and Disk.
+- **📊 Performance Graphing:** Visualizes CPU/RAM trends (Matplotlib).
+- **🚨 Automated Alerts:** Multi-threaded background monitor for instant notifications.
+- **🔝 Process Insights:** `/top` command to identify resource-heavy applications.
+- **🧠 AI Diagnostics:** Gemini 3 Flash integration for heuristic system analysis.
+- **🐳 Dockerized:** Full containerization with host PID access for complete visibility.
 
 ## 🛠️ Tech Stack
-- **OS/Environment:** Linux (Ubuntu/Debian/RHEL), Docker
-- **Monitoring:** `psutil` (Hardware abstraction layer)
-- **Data Visualization:** `Matplotlib`
-- **Automation:** Python 3.12, Multi-threading
-- **Interface:** Telegram Bot API
+- **OS:** Linux (Ubuntu/Debian/RHEL)
+- **Runtime:** Python 3.12, Docker & Docker Compose
+- **Libraries:** `psutil`, `Matplotlib`, `PyTelegramBotAPI`
 
 ## 📦 Deployment
 1. **Clone the repository:**
