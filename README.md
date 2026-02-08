@@ -1,23 +1,31 @@
-# 🛡️ AutoSentinel AI: Intelligent Server Monitoring
+# 🛡️ AutoSentinel-Py: Smart Infrastructure Monitoring
 
-AutoSentinel is a professional-grade monitoring solution that bridges the gap between raw server metrics and actionable insights using **Google Gemini 3.0 AI**.
+AutoSentinel is a robust monitoring solution for Linux Systems and Cloud Infrastructure. It bridges the gap between raw hardware telemetry and actionable intelligence using **Google Gemini 3.0 AI**.
 
-## 🧠 Why AutoSentinel?
-Unlike traditional monitors that just show numbers, AutoSentinel analyzes the context. It tells you *why* your RAM is high and *what* you should do about it in plain language.
+![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+![OS](https://img.shields.io/badge/OS-Linux-black)
+![Environment](https://img.shields.io/badge/Env-Cloud/On--Prem-blue)
+![AI](https://img.shields.io/badge/AI-Gemini_Flash-orange)
+
+## 🌟 Overview
+Unlike standard monitoring tools, AutoSentinel tracks system health, visualizes performance trends, and uses AI to troubleshoot spikes. It is designed for System Administrators who need to manage servers efficiently via Telegram.
 
 ## 🚀 Key Features
-- **Real-Time Diagnostics:** Monitors CPU, Memory, and Disk Health.
-- **AI-Powered Insights:** Integrated with Gemini 3 Flash for heuristic system analysis.
-- **On-the-go Management:** Fully controlled via Telegram Bot API.
-- **Process Tracking:** `/top` command to identify resource-heavy applications.
+- **📊 Performance Graphing:** Visualizes CPU/RAM trends over time (Matplotlib).
+- **🚨 Automated System Alerts:** Background monitoring that triggers instant notifications for resource exhaustion.
+- **🧠 Intelligent Diagnostics:** Uses Gemini 3 Flash to analyze system logs and metrics in real language.
+- **🐳 Containerized Deployment:** Fully Dockerized for consistent deployment across any Linux distribution.
+- **📈 Infrastructure Health:** Real-time metrics for CPU, Memory, and Disk.
 
-## 🛠️ Architecture
-1. **Collector:** Python `psutil` gathers hardware telemetry.
-2. **Analyzer:** Data is structured and sent to **Gemini 3 API** with custom prompting.
-3. **Interface:** Responses are delivered via **Telegram** with Markdown formatting.
+## 🛠️ Tech Stack
+- **OS/Environment:** Linux (Ubuntu/Debian/RHEL), Docker
+- **Monitoring:** `psutil` (Hardware abstraction layer)
+- **Data Visualization:** `Matplotlib`
+- **Automation:** Python 3.12, Multi-threading
+- **Interface:** Telegram Bot API
 
-## 📦 Installation
-1. Clone the repo: `git clone https://github.com/YOUR_USERNAME/AutoSentinel-Py.git`
-2. Install dependencies: `pip install -r requirements.txt`
-3. Set up `.env` with your API keys.
-4. Run: `python monitor.py`
+## 📦 Deployment
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/elad46/AutoSentinel-Py.git](https://github.com/elad46/AutoSentinel-Py.git)
+   cd AutoSentinel-Py
