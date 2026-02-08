@@ -1,0 +1,6 @@
+services:
+  bot:
+    build: .
+    pid: "host"
+    env_file: .env
+    restart: always
