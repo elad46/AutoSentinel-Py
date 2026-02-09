@@ -1,28 +1,27 @@
-# 🛡️ AutoSentinel-Py: Smart Infrastructure Monitoring
+# 🛡️ AutoSentinel-Py: Smart AI-Driven Infrastructure Monitor
 
-AutoSentinel is a professional monitoring engine designed for Linux Systems and Cloud Infrastructure. It combines real-time hardware telemetry with **Google Gemini 3.0 AI** to provide actionable intelligence.
+AutoSentinel is not just a monitor—it's a **proactive system administrator** in your pocket. Built for DevOps and SysAdmins to manage Linux environments via Telegram with real-time AI diagnostics.
 
-![Status](https://img.shields.io/badge/Status-Active-brightgreen)
-![OS](https://img.shields.io/badge/OS-Linux-black)
-![Environment](https://img.shields.io/badge/Env-Cloud/On--Prem-blue)
 
-## 🌟 Overview
-AutoSentinel tracks system health, visualizes trends, and uses AI to troubleshoot spikes. Designed for System Administrators to manage servers efficiently via Telegram without needing SSH for every check.
 
 ## 🚀 Key Features
-- **📊 Performance Graphing:** Visualizes CPU/RAM trends (Matplotlib).
-- **🚨 Automated Alerts:** Multi-threaded background monitor for instant notifications.
-- **🔝 Process Insights:** `/top` command to identify resource-heavy applications.
-- **🧠 AI Diagnostics:** Gemini 3 Flash integration for heuristic system analysis.
-- **🐳 Dockerized:** Full containerization with host PID access for complete visibility.
+* **🧠 AI Log Intelligence:** Analyzes system logs (`/var/log/syslog`) using Google Gemini to explain errors in plain English.
+* **🌐 Dynamic Uptime Monitoring:** Manage and monitor multiple URLs. Get instant alerts on Slack/Telegram when a site goes down.
+* **📊 Interactive UI:** Complete control via Telegram Inline Buttons—no more typing commands.
+* **📈 Resource Visualization:** Generate on-demand performance graphs for CPU and RAM trends.
+* **🐳 Dockerized Deployment:** One-command setup with host-level visibility.
 
 ## 🛠️ Tech Stack
-- **OS:** Linux (Ubuntu/Debian/RHEL)
-- **Runtime:** Python 3.12, Docker & Docker Compose
-- **Libraries:** `psutil`, `Matplotlib`, `PyTelegramBotAPI`
+- **Language:** Python 3.12
+- **Intelligence:** Google Gemini 1.5 Flash API
+- **Monitoring:** `psutil`, `requests`
+- **Visualization:** `matplotlib`
+- **Infrastructure:** Docker & Docker Compose
+- **Alerting:** Telegram Bot API & Slack Webhooks
 
-## 📦 Deployment
-1. **Clone the repository:**
+## 📦 Quick Start
+1. **Clone & Configure:**
    ```bash
    git clone [https://github.com/elad46/AutoSentinel-Py.git](https://github.com/elad46/AutoSentinel-Py.git)
    cd AutoSentinel-Py
+   cp .env.example .env # Fill in your API keys
