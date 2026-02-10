@@ -24,6 +24,28 @@ SITES_FILE = "monitored_sites.txt"
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
+# --- מנגנון אבטחה (Security Middleware) ---
+
+def is_authorized(message):
+    """בודק אם המשתמש הוא ה-ADMIN ושולח התראה על ניסיונות גישה"""
+    user_id = str(message.from_user.id)
+    if user_id == ADMIN_ID:
+        return True
+    
+    # דיווח על ניסיון גישה לא מורשה
+    user_info = f"👤 שם: {message.from_user.first_name} | ID: {user_id}"
+    if message.from_user.username:
+        user_info += f" | @{message.from_user.username}"
+        
+    alert_msg = f"🚫 **ניסיון גישה לא מורשה!**\n{user_info}\nהמשתמש נחסם על ידי המערכת."
+    try:
+        bot.send_message(ADMIN_ID, alert_msg, parse_mode="Markdown")
+    except:
+        pass
+    
+    bot.reply_to(message, "❌ Access Denied. This incident has been reported to the administrator.")
+    return False
+
 # --- פונקציות ניהול אתרים (Persistence) ---
 
 def load_sites():
@@ -33,25 +55,24 @@ def load_sites():
         with open(SITES_FILE, "r") as f:
             file_sites = [line.strip() for line in f.readlines() if line.strip()]
             sites.extend(file_sites)
-    return list(dict.fromkeys(sites)) # הסרת כפילויות ושמירה על סדר
+    return list(dict.fromkeys(sites))
 
 def save_site_to_file(url):
     with open(SITES_FILE, "a") as f:
         f.write(url + "\n")
 
 def rewrite_sites_file(sites_list):
-    """מעדכן את הקובץ לאחר מחיקה (שומר רק אתרים שלא ב-ENV)"""
     env_sites = [s.strip() for s in os.getenv("SITES_TO_CHECK", "").split(",") if s.strip()]
     with open(SITES_FILE, "w") as f:
         for site in sites_list:
             if site not in env_sites:
                 f.write(site + "\n")
 
-# טעינה ראשונית של הרשימה
+# טעינה ראשונית
 MONITORED_SITES = load_sites()
 cpu_history, ram_history, timestamps = [], [], []
 
-# --- פונקציות עזר וניטור ---
+# --- פונקציות ניטור וביצועים ---
 
 def update_stats():
     cpu = psutil.cpu_percent(interval=0.5)
@@ -71,7 +92,7 @@ def get_ai_analysis(cpu, ram):
 def get_system_logs():
     try:
         return subprocess.check_output(["tail", "-n", "15", "/var/log/syslog"], encoding="utf-8")
-    except: return "Could not access system logs."
+    except: return "Could not access system logs (Make sure volume is mounted)."
 
 def analyze_logs_ai(logs):
     try:
@@ -99,23 +120,30 @@ def alert_monitor():
         cpu, ram = update_stats()
         if cpu > 90 or ram > 90:
             msg = f"Alert! High Usage - CPU: {cpu}% RAM: {ram}%"
-            bot.send_message(ADMIN_ID, f"⚠️ {msg}")
-            if SLACK_WEBHOOK_URL: requests.post(SLACK_WEBHOOK_URL, json={"text": msg})
+            try: bot.send_message(ADMIN_ID, f"⚠️ {msg}")
+            except: pass
+            if SLACK_WEBHOOK_URL: 
+                try: requests.post(SLACK_WEBHOOK_URL, json={"text": msg})
+                except: pass
         
         if counter % 5 == 0:
             _, issues = check_uptime()
             if issues:
                 msg = "🚨 Uptime Alert!\n" + "\n".join(issues)
-                bot.send_message(ADMIN_ID, msg)
-                if SLACK_WEBHOOK_URL: requests.post(SLACK_WEBHOOK_URL, json={"text": msg})
+                try: bot.send_message(ADMIN_ID, msg)
+                except: pass
+                if SLACK_WEBHOOK_URL: 
+                    try: requests.post(SLACK_WEBHOOK_URL, json={"text": msg})
+                    except: pass
         counter += 1
         time.sleep(60)
 
-# --- ממשק טלגרם ---
+# --- ממשק טלגרם עם בדיקות אבטחה ---
 
 @bot.message_handler(commands=['start', 'manage'])
 def manage_panel(message):
-    if str(message.from_user.id) != ADMIN_ID: return
+    if not is_authorized(message): return
+    
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         types.InlineKeyboardButton("➕ הוסף אתר", callback_data="add_site"),
@@ -125,15 +153,18 @@ def manage_panel(message):
         types.InlineKeyboardButton("🔍 ניתוח לוגים", callback_data="analyze_logs"),
         types.InlineKeyboardButton("📈 גרף", callback_data="send_graph")
     )
-    bot.send_message(message.chat.id, "🛡️ **לוח הבקרה של AutoSentinel**", reply_markup=markup, parse_mode="Markdown")
+    bot.send_message(message.chat.id, "🛡️ **לוח הבקרה של AutoSentinel**\nבחר פעולה:", reply_markup=markup, parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
-    if str(call.from_user.id) != ADMIN_ID: return
+    if str(call.from_user.id) != ADMIN_ID:
+        bot.answer_callback_query(call.id, "Access Denied.")
+        return
     
     if call.data == "add_site":
         msg = bot.send_message(call.message.chat.id, "שלח כתובת אתר להוספה (התחל ב-http):")
         bot.register_next_step_handler(msg, process_add_site)
+        
     elif call.data == "remove_site":
         if not MONITORED_SITES:
             bot.send_message(call.message.chat.id, "אין אתרים להסרה.")
@@ -141,50 +172,62 @@ def handle_query(call):
         menu = "בחר מספר אתר להסרה:\n" + "\n".join([f"{i+1}. {s}" for i, s in enumerate(MONITORED_SITES)])
         msg = bot.send_message(call.message.chat.id, menu)
         bot.register_next_step_handler(msg, process_remove_site)
+        
     elif call.data == "list_sites":
         report, _ = check_uptime()
         bot.send_message(call.message.chat.id, f"🌐 **סטטוס אתרים:**\n\n{report}")
+        
     elif call.data == "server_status":
         cpu, ram = update_stats()
         insight = get_ai_analysis(cpu, ram)
-        bot.send_message(call.message.chat.id, f"🖥 **סטטוס:**\nCPU: {cpu}% | RAM: {ram}%\n\n🤖 **AI:** {insight}")
+        bot.send_message(call.message.chat.id, f"🖥 **סטטוס מערכת:**\nCPU: {cpu}% | RAM: {ram}%\n\n🤖 **תובנת AI:** {insight}")
+        
     elif call.data == "analyze_logs":
         bot.answer_callback_query(call.id, "מנתח לוגים...")
         logs = get_system_logs()
         analysis = analyze_logs_ai(logs)
-        bot.send_message(call.message.chat.id, f"🔍 **ניתוח לוגים:**\n\n{analysis}")
+        bot.send_message(call.message.chat.id, f"🔍 **ניתוח לוגים עם AI:**\n\n{analysis}")
+        
     elif call.data == "send_graph":
         send_performance_graph(call.message)
 
 def process_add_site(message):
+    if not is_authorized(message): return
     url = message.text.strip()
     if url.startswith("http") and url not in MONITORED_SITES:
         MONITORED_SITES.append(url)
         save_site_to_file(url)
-        bot.reply_to(message, f"✅ {url} נוסף ונשמר!")
-    else: bot.reply_to(message, "כתובת לא תקינה או כבר קיימת.")
+        bot.reply_to(message, f"✅ {url} נוסף לרשימה ונשמר קבוע.")
+    else:
+        bot.reply_to(message, "❌ כתובת לא תקינה או כבר קיימת.")
 
 def process_remove_site(message):
+    if not is_authorized(message): return
     try:
         idx = int(message.text.strip()) - 1
         if 0 <= idx < len(MONITORED_SITES):
             removed = MONITORED_SITES.pop(idx)
             rewrite_sites_file(MONITORED_SITES)
-            bot.reply_to(message, f"🗑️ {removed} הוסר.")
-        else: bot.reply_to(message, "מספר לא ברשימה.")
-    except: bot.reply_to(message, "נא לשלוח מספר בלבד.")
+            bot.reply_to(message, f"🗑️ {removed} הוסר מהניטור.")
+        else:
+            bot.reply_to(message, "מספר לא תקין.")
+    except:
+        bot.reply_to(message, "נא לשלוח מספר בלבד.")
 
 def send_performance_graph(message):
     if len(cpu_history) < 2:
-        bot.send_message(message.chat.id, "ממתין לנתונים...")
+        bot.send_message(message.chat.id, "ממתין לאיסוף נתונים...")
         return
     plt.figure(figsize=(10, 5))
-    plt.plot(timestamps, cpu_history, label='CPU', color='red')
-    plt.plot(timestamps, ram_history, label='RAM', color='blue')
-    plt.legend(); plt.grid(True); plt.savefig("graph.png"); plt.close()
-    with open("graph.png", 'rb') as f: bot.send_photo(message.chat.id, f)
+    plt.plot(timestamps, cpu_history, label='CPU %', color='red')
+    plt.plot(timestamps, ram_history, label='RAM %', color='blue')
+    plt.ylim(0, 100)
+    plt.legend(); plt.grid(True); plt.title("Server Performance Over Time")
+    plt.savefig("graph.png"); plt.close()
+    with open("graph.png", 'rb') as f:
+        bot.send_photo(message.chat.id, f)
 
 if __name__ == "__main__":
     threading.Thread(target=alert_monitor, daemon=True).start()
-    print("🚀 Sentinel V2.3 Online")
+    print("🚀 AutoSentinel V2.4 is running with Security & Persistence")
     bot.infinity_polling()
