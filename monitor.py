@@ -25,30 +25,21 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- אבטחה (Authorization) ---
-
 def is_authorized(message):
-    """בודק הרשאות ושולח התראה על גישה לא מורשת"""
     user_id = str(message.from_user.id)
     if user_id == ADMIN_ID:
         return True
-    
     user_info = f"👤 שם: {message.from_user.first_name} | ID: {user_id}"
-    if message.from_user.username:
-        user_info += f" | @{message.from_user.username}"
-        
+    if message.from_user.username: user_info += f" | @{message.from_user.username}"
     alert_msg = f"🚫 **ניסיון גישה לא מורשה!**\n{user_info}\nהמשתמש נחסם."
     try:
         bot.send_message(ADMIN_ID, alert_msg, parse_mode="Markdown")
-    except:
-        pass
-    
+    except: pass
     bot.reply_to(message, "❌ Access Denied. Your ID is not authorized.")
     return False
 
 # --- ניהול אתרים (Persistence) ---
-
 def load_sites():
-    """טוען אתרים מ-ENV ומהקובץ"""
     sites = [s.strip() for s in os.getenv("SITES_TO_CHECK", "").split(",") if s.strip()]
     if os.path.exists(SITES_FILE):
         with open(SITES_FILE, "r") as f:
@@ -57,21 +48,18 @@ def load_sites():
     return list(dict.fromkeys(sites))
 
 def save_site_to_file(url):
-    with open(SITES_FILE, "a") as f:
-        f.write(url + "\n")
+    with open(SITES_FILE, "a") as f: f.write(url + "\n")
 
 def rewrite_sites_file(sites_list):
     env_sites = [s.strip() for s in os.getenv("SITES_TO_CHECK", "").split(",") if s.strip()]
     with open(SITES_FILE, "w") as f:
         for site in sites_list:
-            if site not in env_sites:
-                f.write(site + "\n")
+            if site not in env_sites: f.write(site + "\n")
 
 MONITORED_SITES = load_sites()
 cpu_history, ram_history, timestamps = [], [], []
 
 # --- ניטור ולוגיקה ---
-
 def update_stats():
     cpu = psutil.cpu_percent(interval=0.5)
     ram = psutil.virtual_memory().percent
@@ -84,23 +72,21 @@ def update_stats():
 def get_ai_analysis(cpu, ram):
     try:
         prompt = f"Server status: CPU {cpu}%, RAM {ram}%. Provide a 1-sentence professional insight."
-        return model.generate_content(prompt).text
-    except Exception as e:
-        return f"AI insight unavailable (Check API Key)."
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except: return "AI insight unavailable at the moment."
 
 def get_system_logs():
     try:
-        # פקודה לקריאת לוגים - וודא שהווליום מחובר ב-Docker
         return subprocess.check_output(["tail", "-n", "20", "/var/log/syslog"], encoding="utf-8")
-    except:
-        return "System logs unreachable. Verify volume mounting in Docker."
+    except: return "System logs unreachable. Verify volume mounting."
 
 def analyze_logs_ai(logs):
     try:
-        prompt = f"Analyze these Linux logs and identify any issues or errors briefly:\n\n{logs}"
-        return model.generate_content(prompt).text
-    except:
-        return "AI Log Analysis failed."
+        prompt = f"Analyze these Linux logs and identify any issues briefly:\n\n{logs}"
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except: return "AI Log Analysis failed."
 
 def check_uptime():
     report, issues = [], []
@@ -125,7 +111,6 @@ def alert_monitor():
             if SLACK_WEBHOOK_URL:
                 try: requests.post(SLACK_WEBHOOK_URL, json={"text": msg})
                 except: pass
-        
         if counter % 5 == 0:
             _, issues = check_uptime()
             if issues:
@@ -136,11 +121,9 @@ def alert_monitor():
         time.sleep(60)
 
 # --- ממשק טלגרם ---
-
 @bot.message_handler(commands=['start', 'manage'])
 def manage_panel(message):
     if not is_authorized(message): return
-    
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         types.InlineKeyboardButton("➕ הוסף אתר", callback_data="add_site"),
@@ -155,11 +138,9 @@ def manage_panel(message):
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
     if str(call.from_user.id) != ADMIN_ID: return
-    
     if call.data == "add_site":
-        msg = bot.send_message(call.message.chat.id, "אנא שלח את כתובת ה-URL (כולל http/https):")
+        msg = bot.send_message(call.message.chat.id, "אנא שלח את כתובת ה-URL:")
         bot.register_next_step_handler(msg, process_add_site)
-        
     elif call.data == "remove_site":
         if not MONITORED_SITES:
             bot.send_message(call.message.chat.id, "אין אתרים ברשימה.")
@@ -167,62 +148,50 @@ def handle_query(call):
         menu = "בחר מספר אתר להסרה:\n" + "\n".join([f"{i+1}. {s}" for i, s in enumerate(MONITORED_SITES)])
         msg = bot.send_message(call.message.chat.id, menu)
         bot.register_next_step_handler(msg, process_remove_site)
-        
     elif call.data == "list_sites":
         report, _ = check_uptime()
         bot.send_message(call.message.chat.id, f"🌐 **Uptime Report:**\n\n{report}", parse_mode="Markdown")
-        
     elif call.data == "server_status":
         cpu, ram = update_stats()
         insight = get_ai_analysis(cpu, ram)
         bot.send_message(call.message.chat.id, f"🖥 **סטטוס מערכת:**\nCPU: {cpu}% | RAM: {ram}%\n\n🤖 **תובנת AI:**\n{insight}", parse_mode="Markdown")
-        
     elif call.data == "analyze_logs":
         bot.answer_callback_query(call.id, "מנתח לוגים...")
         logs = get_system_logs()
         analysis = analyze_logs_ai(logs)
         bot.send_message(call.message.chat.id, f"🔍 **ניתוח לוגים חכם:**\n\n{analysis}", parse_mode="Markdown")
-        
     elif call.data == "send_graph":
         send_performance_graph(call.message)
 
 def process_add_site(message):
-    url = message.text.strip()
-    if url.startswith("http"):
+    url = message.text.strip().lower()
+    if url.startswith("http") and "." in url:
         if url not in MONITORED_SITES:
             MONITORED_SITES.append(url)
             save_site_to_file(url)
-            bot.reply_to(message, f"✅ האתר {url} נוסף בהצלחה.")
-        else:
-            bot.reply_to(message, "האתר כבר קיים במערכת.")
-    else:
-        bot.reply_to(message, "URL לא תקין. וודא שהוא מתחיל ב-http.")
+            bot.reply_to(message, f"✅ האתר {url} נוסף.")
+        else: bot.reply_to(message, "האתר כבר קיים.")
+    else: bot.reply_to(message, "URL לא תקין.")
 
 def process_remove_site(message):
     try:
         idx = int(message.text.strip()) - 1
-        if 0 <= idx < len(MONITORED_SITES):
-            removed = MONITORED_SITES.pop(idx)
-            rewrite_sites_file(MONITORED_SITES)
-            bot.reply_to(message, f"🗑️ {removed} הוסר מהרשימה.")
-        else:
-            bot.reply_to(message, "מספר לא קיים ברשימה.")
-    except:
-        bot.reply_to(message, "נא לשלוח מספר בלבד.")
+        removed = MONITORED_SITES.pop(idx)
+        rewrite_sites_file(MONITORED_SITES)
+        bot.reply_to(message, f"🗑️ {removed} הוסר.")
+    except: bot.reply_to(message, "שגיאה בהסרה.")
 
 def send_performance_graph(message):
     if len(cpu_history) < 2:
-        bot.send_message(message.chat.id, "ממתין לאיסוף נתונים נוספים...")
+        bot.send_message(message.chat.id, "ממתין לנתונים...")
         return
     plt.figure(figsize=(10, 5))
-    plt.plot(timestamps, cpu_history, label='CPU %', color='red', marker='o')
-    plt.plot(timestamps, ram_history, label='RAM %', color='blue', marker='o')
-    plt.ylim(0, 100); plt.legend(); plt.grid(True); plt.title("System Resources Over Time")
+    plt.plot(timestamps, cpu_history, label='CPU %', color='red')
+    plt.plot(timestamps, ram_history, label='RAM %', color='blue')
+    plt.ylim(0, 100); plt.legend(); plt.grid(True)
     plt.savefig("graph.png"); plt.close()
-    with open("graph.png", 'rb') as f:
-        bot.send_photo(message.chat.id, f)
+    with open("graph.png", 'rb') as f: bot.send_photo(message.chat.id, f)
 
 if __name__ == "__main__":
     threading.Thread(target=alert_monitor, daemon=True).start()
-    print("🛡️ AutoSentinel V2.5 is Online")
     bot.infinity_polling()
